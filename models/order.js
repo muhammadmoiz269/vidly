@@ -21,6 +21,11 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  cartId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "cart",
+    required: true,
+  },
   created_at: {
     type: Date,
     default: Date.now,
@@ -39,6 +44,7 @@ const validateOrder = (orderPayload) => {
     totalAmount: Joi.number().required(),
     status: Joi.string().required(),
     paymentId: Joi.string().required(),
+    cartId: Joi.string().required(),
   });
 
   return orderSchema.validate(orderPayload);

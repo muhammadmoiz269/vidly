@@ -27,9 +27,16 @@ app.use(cors(corsOptions));
 // }
 
 mongoose
-  .connect("mongodb://localhost:27017/vidly")
+  .connect("mongodb://localhost:27017/vidly?retryWrites=true&w=majority")
   .then(() => console.log("connected"))
   .catch((err) => console.log(err));
+
+// mongoose
+//   .connect(
+//     "mongodb://localhost:27017,localhost:27018,localhost:27019/?replicaSet=rs0"
+//   )
+//   .then(() => console.log("connected"))
+//   .catch((err) => console.log(err));
 
 // app.use(
 //   session({
@@ -39,10 +46,15 @@ mongoose
 //   })
 // );
 app.use(express.json());
+
+//handling reister user and login
 app.use("/api/user", user);
 app.use("/api/auth", auth);
 
+//creating products, can only CRUD admin
 app.use("/api/product", product);
+
+//User can first add items to their cart, then follow checkout process, gets the payment link and then complete their order
 app.use("/api/addToCart", addToCart);
 app.use("/api/checkout", checkout);
 app.use("/api/payment", payment);

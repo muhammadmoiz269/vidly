@@ -13,6 +13,10 @@ const cartItemSchema = new mongoose.Schema({
     required: true,
     min: 1,
   },
+  isReviewed: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const cartSchema = new mongoose.Schema({
@@ -39,9 +43,19 @@ const validateCart = (cart) => {
   return cartSchema.validate(cart);
 };
 
+const validateDeleteProd = (payload) => {
+  const delProdSchema = Joi.object({
+    userId: Joi.string().required(),
+    productId: Joi.string().required(),
+  });
+
+  return delProdSchema.validate(payload);
+};
+
 const Cart = new mongoose.model("cart", cartSchema);
 
 exports.cartItemSchema = cartItemSchema;
 exports.cartSchema = cartSchema;
 exports.Cart = Cart;
 exports.validateCart = validateCart;
+exports.validateDeleteProd = validateDeleteProd;

@@ -1,0 +1,74 @@
+Product CRUD
+2.1Create Product
+Endpoint: POST /api/products
+Description: Allows admin to create a new product
+Request Body: { "name": "string", "description": "string", "price": "number", "stock": "number", category:"Array" }
+Authorization: Bearer token (admin role required)
+
+
+2.2Update Product
+Endpoint: PUT /api/products/:id
+Description: Allows admin to update an existing product
+Request Body: { "name": "string", "description": "string", "price": "number", "stock": "number" }
+Authorization: Bearer token (admin role required)
+
+2.3Delete Product
+Endpoint: DELETE /api/products/:id
+Description: Allows admin to delete a product
+Authorization: Bearer token (admin role required)
+
+
+3. Product Viewing (All Users)
+3.1. List Products
+Endpoint: GET /api/products
+Description: Retrieves a list of all products
+
+3.2. Get Product Details
+Endpoint: GET /api/products/:id
+Description: Retrieves details of a single product
+
+
+4. Cart and Checkout (All Users)
+4.1. Add to Cart
+Endpoint: POST /api/cart
+Description: Adds a product to the user's cart
+Request Body: { "items": "Array", "userId":"string" }
+		 items ==> {productId, quantity}
+Authorization: Bearer token
+
+4.2. View Cart
+Endpoint: GET /api/cart
+Description: Retrieves the user's cart
+Authorization: Bearer token
+
+4.3. Checkout
+Endpoint: POST /api/checkout
+Description: Processes the checkout and payment using Stripe
+Request Body: { "cart": [{ "productId": "string", "quantity": "number" }] }
+Authorization: Bearer token
+
+Client-Side:
+Use Stripe.js to collect card details and generate a token.
+Send the token to the backend along with the checkout request.
+Backend:
+
+Receive the token from the request body.
+Use the token to create a payment method and payment intent with Stripe.
+Confirm the payment intent.
+Update product stock, create an order, and clear the cart.
+
+	4.3.1 Validate the cart.
+	4.3.2 Calculate the total amount.
+	4.3.3 Create a Stripe payment intent
+	4.4.4 Update product quantities.
+	4.4.5 Save the order details.
+
+Filtration Api based on sub categories
+Searching APi based on sub categories
+Sorting
+Pagination
+get particular data only
+
+
+
+

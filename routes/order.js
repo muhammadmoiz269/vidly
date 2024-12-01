@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const { validateOrder, Order } = require("../models/order");
 const { Cart } = require("../models/cart");
 const auth = require("../middleware/auth");
@@ -51,6 +52,7 @@ router.post("/", auth, async (req, res) => {
     totalAmount,
     status: "pending",
     paymentId: paymentIntent.id,
+    cartId: cart._id,
   });
 
   console.log("order", order);
@@ -66,11 +68,14 @@ router.post("/", auth, async (req, res) => {
   });
 });
 
-router.get("/get-user-order/:id", auth, async (req, res) => {
-  const userId = req.params.id;
+router.get("/get-user-order", auth, async (req, res) => {
+  const userId = req.query.id;
+
   let userOrdersObj = {};
   try {
-    const userOrders = await Order.find({ userId: userId });
+    const userOrders = await Order.find({ userId: userId }).sort({
+      created_at: -1,
+    });
     if (!userOrders) return res.status(404).send("No orders found");
 
     const totalAmountSpent = userOrders.reduce((acc, curr) => {
@@ -86,5 +91,79 @@ router.get("/get-user-order/:id", auth, async (req, res) => {
   } catch (error) {
     res.status(500).send(`Something went wrong ${error}`);
   }
+});
+
+router.get("/get-order", auth, async (req, res) => {
+  const orderId = new mongoose.Types.ObjectId(req.query.id);
+
+  try {
+    let order = await Order.aggregate([
+      {
+        $match: { _id: orderId },
+      },
+      {
+        $unwind: "$items",
+      },
+      {
+        $lookup: {
+          from: "products", // Name of the product collection
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      {
+        $unwind: "$productDetails",
+      },
+      {
+        $group: {
+          _id: "$_id",
+          userId: { $first: "$userId" },
+          items: {
+            $push: {
+              productId: "$items.productId",
+              productName: "$productDetails.name",
+              productDescription: "$productDetails.description",
+              productPrice: "$productDetails.price",
+              productCategory: "$productDetails.category",
+              isReviewed: "$items.isReviewed",
+            },
+          },
+        },
+      },
+    ]);
+
+    res.status(200).send(order);
+  } catch (error) {
+    res.status(500).send(`Something went wrong ${error}`);
+  }
+});
+
+router.post("/add-review", auth, async (req, res) => {
+  const { orderId, productId, rating, userId } = req.body;
+
+  const staticComment = "Quality is good";
+  const orderUpdateResult = await Order.updateOne(
+    { _id: orderId, "items.productId": productId },
+    { $set: { "items.$.isReviewed": true } }
+  );
+
+  const productUpdateResult = await Product.updateOne(
+    {
+      _id: productId,
+    },
+
+    {
+      $push: {
+        review: {
+          userId,
+          rating,
+          comment: staticComment,
+        },
+      },
+    }
+  );
+
+  res.status(200).send("Review added");
 });
 module.exports = router;

@@ -55,4 +55,64 @@ router.post("/confirm", auth, async (req, res) => {
   res.status(200).send(response);
 });
 
+router.post("/process-order", auth, async (req, res) => {
+  try {
+    const { orderId, paymentIntentId } = req.body;
+
+    // Fetch the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(400).send("Order not found");
+    }
+
+    // Validate payment status
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (!paymentIntent || paymentIntent.status !== "succeeded") {
+      return res
+        .status(400)
+        .send("Payment not successful or invalid Payment Intent ID");
+    }
+
+    // Update inventory
+    for (const item of order.items) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(400).send(`Product not found: ${item.productId}`);
+      }
+
+      if (product.stock < item.quantity) {
+        return res
+          .status(400)
+          .send(`Insufficient stock for product: ${product.name}`);
+      }
+
+      product.stock -= item.quantity;
+      await product.save();
+    }
+
+    // Mark the order as completed
+    const completedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { status: "completed" },
+      { new: true }
+    );
+
+    // Clear the cart
+    if (order.cartId) {
+      await Cart.findByIdAndDelete(order.cartId);
+    }
+
+    console.log("Order processed:", completedOrder);
+
+    return res.status(200).send({
+      message: `Order ${orderId} processed successfully`,
+      order: completedOrder,
+    });
+  } catch (error) {
+    console.error("Error processing order:", error);
+    res.status(500).send("An error occurred while processing the order");
+  }
+});
+
 module.exports = router;

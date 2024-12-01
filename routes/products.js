@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const {
   Product,
   validateProduct,
@@ -8,6 +9,9 @@ const {
 const auth = require("../middleware/auth");
 const admin = require("../middleware/admin");
 const { User } = require("../models/users");
+const rateLimiter = require("../middleware/rate-limit");
+const NodeCache = require("node-cache");
+const myCache = new NodeCache({ stdTTL: 60 });
 
 router.post("/", [auth, admin], async (req, res) => {
   console.log("req.body", req.body);
@@ -55,12 +59,21 @@ router.post("/:id/review", auth, async (req, res) => {
 });
 
 router.get("/", async (req, res) => {
-  const result = await Product.find();
-  res.status(200).send(result);
+  //Implementing caching here
+  if (myCache.has("products")) {
+    console.log("Getting it from cache");
+    return res.status(200).send(JSON.parse(myCache.get("products")));
+  } else {
+    const result = await Product.find();
+    console.log("Getting from Api");
+    myCache.set("products", JSON.stringify(result));
+    res.status(200).send(result);
+  }
 });
 
-router.get("/top-rated/:rating", auth, async (req, res) => {
+router.get("/top-rated/:rating", [auth, rateLimiter], async (req, res) => {
   try {
+    console.log("req.params", req.params);
     const rating = Number(req.params.rating);
 
     const result = await Product.aggregate([
@@ -85,7 +98,7 @@ router.get("/top-rated/:rating", auth, async (req, res) => {
   }
 });
 
-router.get("/search", auth, async (req, res) => {
+router.get("/search", [auth, rateLimiter], async (req, res) => {
   const { name, subcategory, range, limit = 2, page = 1 } = req.query;
   console.log("name", name, subcategory);
 
@@ -99,7 +112,7 @@ router.get("/search", auth, async (req, res) => {
     if (subcategory) {
       query.$or.push({
         category: {
-          $elemMatch: { $regex: subcategory, $options: "i" },
+          $in: subcategory.map((sub) => sub.toLowerCase()),
         },
       });
     }
@@ -147,6 +160,55 @@ router.delete("/:id", [auth, admin], async (req, res) => {
   if (!prod)
     return res.status(404).send("The product with the given id was not found");
   res.status(200).send(prod);
+});
+
+//roll back mechanism
+router.post("/add-update", [auth, admin], async (req, res) => {
+  console.log("req.body", req.body);
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { name, description, price, category, stock, id } = req.body;
+    // const { error } = validateProduct(req.body);
+    // if (error) return res.status(400).send(error.details[0].message);
+
+    const prod = new Product({
+      name,
+      description,
+      price,
+      category,
+      stock,
+    });
+
+    const result = await prod.save({ session });
+
+    // Intentionally throw an error to test rollback
+    if (true) {
+      throw new Error("Forcing an error to test rollback");
+    }
+
+    const prodToUpdate = await Product.findByIdAndUpdate(
+      id,
+      {
+        stock: stock,
+      },
+      { new: true, session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).send(result);
+  } catch (error) {
+    console.log("error", error);
+
+    await session.abortTransaction();
+    session.endSession();
+
+    res.status(400).send(error.message);
+  }
 });
 
 module.exports = router;
